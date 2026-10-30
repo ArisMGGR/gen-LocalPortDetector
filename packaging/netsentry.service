@@ -1,0 +1,50 @@
+[Unit]
+Description=netsentry LAN device monitor
+Documentation=file:///opt/netsentry/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+ExecStart=/usr/local/bin/netsentry --config /etc/netsentry/netsentry.conf run
+Restart=on-failure
+RestartSec=15
+# Exit status 78 means bad config or missing privileges; restarting would not help.
+RestartPreventExitStatus=78
+WatchdogSec=180
+
+User=netsentry
+Group=netsentry
+StateDirectory=netsentry
+StateDirectoryMode=0750
+LogsDirectory=netsentry
+LogsDirectoryMode=0750
+UMask=0027
+
+# Raw ARP needs CAP_NET_RAW and nothing else.
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+NoNewPrivileges=yes
+
+# Sandboxing
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectHostname=yes
+ProtectClock=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_PACKET AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+
+[Install]
+WantedBy=multi-user.target

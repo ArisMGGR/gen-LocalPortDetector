@@ -1,0 +1,29 @@
+# Python bytecode (created by running the tests or `python3 -m netsentry`)
+__pycache__/
+*.py[cod]
+
+# Local development config: holds real ntfy tokens, webhook URLs and SMTP passwords.
+# The shipped template lives in packaging/netsentry.conf and stays tracked.
+/*.conf
+*.local.conf
+
+# Runtime data from local runs: device inventory (MACs, IPs, hostnames) and event logs
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.jsonl
+*.log
+
+# Editor backups and scratch files
+*~
+*.swp
+*.bak
+*.orig
+
+# OS files
+Thumbs.db
+desktop.ini
+.DS_Store
