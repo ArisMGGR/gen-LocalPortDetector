@@ -51,14 +51,13 @@ systemctl daemon-reload
 if systemctl is-active --quiet netsentry; then
     systemctl restart netsentry
     echo "netsentry upgraded and restarted."
-else
+elif [[ -z "${NETSENTRY_SKIP_NEXT_STEPS:-}" ]]; then
     cat <<EOF
 
-netsentry is installed. Next steps:
-  1. Set up notifications:       sudo nano $CONF_DIR/netsentry.conf
-  2. Check that they arrive:     sudo netsentry test-notify
-  3. Optionally preview a scan:  sudo netsentry scan
-  4. Start it now and on boot:   sudo systemctl enable --now netsentry
-  5. Follow the log:             journalctl -u netsentry -f
+netsentry is installed. Configure notifications and start it with:
+  sudo netsentry setup
+
+Or by hand: edit $CONF_DIR/netsentry.conf, then run
+  sudo netsentry test-notify && sudo systemctl enable --now netsentry
 EOF
 fi

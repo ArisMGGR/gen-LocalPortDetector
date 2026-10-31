@@ -40,22 +40,37 @@ to the database (`netsentry events`) and to `/var/log/netsentry/events.jsonl`.
 ## Install
 
 ```bash
-sudo ./install.sh
+sudo ./setup.sh
 ```
 
-This creates a `netsentry` system user, installs the program to `/opt/netsentry`, the command to
-`/usr/local/bin/netsentry`, the config to `/etc/netsentry/netsentry.conf` and the unit to
+This installs netsentry and then asks a few questions:
+
+1. **Network**: confirms the detected interface and subnet, or lets you pick another.
+2. **Notifications**: sets up ntfy (it suggests a random topic and tells you what to subscribe to
+   in the app), a Slack/Discord/generic webhook, or email, and sends a test alert through each.
+3. **Alerts**: whether to be told about devices coming and going, and whether to trust what is on
+   the network right now.
+4. Shows a summary, saves `/etc/netsentry/netsentry.conf`, optionally previews a scan, and enables and
+   starts the service.
+
+Run `sudo netsentry setup` at any time to change these answers; it edits the config in place and
+keeps its comments.
+
+The install step creates a `netsentry` system user, installs the program to `/opt/netsentry`, the
+command to `/usr/local/bin/netsentry`, the config to `/etc/netsentry/netsentry.conf` and the unit to
 `/etc/systemd/system/netsentry.service`. Running it again upgrades in place and keeps your config.
 
-Then:
+<details>
+<summary>Manual setup instead</summary>
 
-1. **Set up notifications** in `/etc/netsentry/netsentry.conf`. The quickest is ntfy: install the
-   ntfy app on your phone, subscribe to a long random topic, and set
-   `url = https://ntfy.sh/<that-topic>` under `[ntfy]`.
-2. `sudo netsentry test-notify`: check that the alert reaches you.
-3. `sudo netsentry scan`: optional, shows what is on the network right now.
-4. `sudo systemctl enable --now netsentry`
-5. `journalctl -u netsentry -f`
+```bash
+sudo ./install.sh                                  # install only, no questions
+sudo nano /etc/netsentry/netsentry.conf            # set up [ntfy], [webhook] or [email]
+sudo netsentry test-notify                         # check that the alert reaches you
+sudo systemctl enable --now netsentry
+```
+
+</details>
 
 On the first scan everything currently on the network is recorded as trusted and you get one
 "Monitoring started" summary. **Go through that list once** (`sudo netsentry list`) and name the
@@ -73,6 +88,7 @@ sudo netsentry approve --all        # trust everything currently unapproved
 sudo netsentry revoke aa:bb:cc:dd:ee:ff
 sudo netsentry forget aa:bb:cc:dd:ee:ff   # it will alert as new if seen again
 sudo netsentry events -n 100
+sudo netsentry setup                # change network, notification or alert settings
 systemctl status netsentry          # shows "N devices online" from the last scan
 ```
 

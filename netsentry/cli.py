@@ -26,11 +26,15 @@ class CliError(Exception):
 
 def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)
+    setup = args.command == "setup"
     try:
-        cfg = load_config(args.config or DEFAULT_CONFIG_PATH, required=args.config is not None)
+        cfg = load_config(args.config or DEFAULT_CONFIG_PATH, required=args.config is not None and not setup)
     except ConfigError as exc:
         print(f"netsentry: {exc}", file=sys.stderr)
-        return 78
+        if not setup:
+            return 78
+        print("netsentry: setup will start from the default settings", file=sys.stderr)
+        cfg = Config()
     setup_logging(cfg.general.log_level)
     try:
         return args.func(args, cfg)
@@ -50,6 +54,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("-c", "--config", help=f"config file (default: {DEFAULT_CONFIG_PATH})")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
+
+    p = sub.add_parser("setup", help="answer a few questions to configure notifications and start the service")
+    p.set_defaults(func=cmd_setup)
 
     p = sub.add_parser("run", help="run the monitoring daemon (what the systemd service does)")
     p.set_defaults(func=cmd_run)
@@ -85,6 +92,20 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("test-notify", help="send a test alert through every configured channel")
     p.set_defaults(func=cmd_test_notify)
     return parser
+
+
+def cmd_setup(args: argparse.Namespace, cfg: Config) -> int:
+    from .wizard import Wizard
+
+    if not sys.stdin.isatty():
+        raise CliError("setup asks questions, so run it in a terminal")
+    wizard = Wizard(args.config or DEFAULT_CONFIG_PATH, cfg,
+                    preview=lambda c: cmd_scan(argparse.Namespace(interface=None, subnet=None), c))
+    try:
+        return wizard.run()
+    except (KeyboardInterrupt, EOFError):
+        print("\nSetup cancelled." + ("" if wizard.saved else " Nothing was saved."), file=sys.stderr)
+        return 130
 
 
 def cmd_run(args: argparse.Namespace, cfg: Config) -> int:
