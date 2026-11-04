@@ -3,9 +3,9 @@ __pycache__/
 *.py[cod]
 
 # Local development config: holds real ntfy tokens, webhook URLs and SMTP passwords.
-# The shipped template lives in packaging/netsentry.conf and stays tracked.
-/*.conf
-*.local.conf
+# Ignored anywhere in the tree; only the shipped template stays tracked.
+*.conf
+!packaging/netsentry.conf
 
 # Runtime data from local runs: device inventory (MACs, IPs, hostnames) and event logs
 *.db
@@ -16,6 +16,12 @@ __pycache__/
 *.sqlite3
 *.jsonl
 *.log
+
+# Code-check working notes (local audit output)
+tests/FINDINGS.md
+tests/LOG.md
+tests/PASSES.md
+tests/VERIFY.md
 
 # Editor backups and scratch files
 *~
