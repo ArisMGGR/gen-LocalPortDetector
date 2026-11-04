@@ -4,7 +4,7 @@ import unittest
 from unittest import mock
 
 from netsentry import notify
-from netsentry.config import ConfigError, load_config
+from netsentry.config import Config, ConfigError, load_config
 from netsentry.oui import parse_oui_file
 from netsentry.store import Event
 
@@ -20,10 +20,7 @@ def write_temp(text):
 
 class ConfigTest(unittest.TestCase):
     def test_packaged_config_matches_defaults(self):
-        cfg = load_config(PACKAGED_CONFIG)
-        self.assertEqual(cfg.scan.interval, 60)
-        self.assertEqual(cfg.email.recipients, [])
-        self.assertTrue(cfg.detection.baseline_on_first_run)
+        self.assertEqual(load_config(PACKAGED_CONFIG), Config())
 
     def test_values_are_typed(self):
         path = write_temp("[scan]\ninterval = 30\ntimeout = 1.5\nresolve_hostnames = no\n"

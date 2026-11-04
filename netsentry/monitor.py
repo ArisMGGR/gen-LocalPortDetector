@@ -23,7 +23,10 @@ class Monitor:
     def process(self, scan: ScanResult, now: Optional[float] = None) -> List[Event]:
         """Record one scan and return the events it produced (also saved to the store)."""
         now = time.time() if now is None else now
-        baseline = self.cfg.baseline_on_first_run and self.store.meta_get("baseline_done") is None
+        # The first scan is decided once, whatever the setting was then; flipping the setting
+        # later must never turn an ordinary scan into a baseline that trusts unknown devices.
+        first_run = self.store.meta_get("baseline_done") is None and not self.store.devices()
+        baseline = self.cfg.baseline_on_first_run and first_run
         seen = scan.by_mac()
         events: List[Event] = []
 
@@ -45,8 +48,9 @@ class Monitor:
         events.extend(self._check_conflicts(scan, now))
         events.extend(self._check_gateway(scan, now))
 
-        if baseline:
+        if first_run:
             self.store.meta_set("baseline_done", str(now))
+        if baseline:
             events.append(Event("baseline", "warning",
                                 f"Monitoring started. The {len(seen)} devices currently on {scan.interface.network} "
                                 "were recorded as trusted; review them with 'netsentry list'.", ts=now))

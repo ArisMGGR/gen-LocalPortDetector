@@ -27,8 +27,12 @@ class CliError(Exception):
 def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     setup = args.command == "setup"
+    path = args.config or DEFAULT_CONFIG_PATH
     try:
-        cfg = load_config(args.config or DEFAULT_CONFIG_PATH, required=args.config is not None and not setup)
+        cfg = load_config(path, required=args.config is not None and not setup)
+    except PermissionError:
+        print(f"netsentry: permission denied reading {path} (try sudo)", file=sys.stderr)
+        return 1
     except ConfigError as exc:
         print(f"netsentry: {exc}", file=sys.stderr)
         if not setup:
@@ -158,6 +162,8 @@ def cmd_list(args: argparse.Namespace, cfg: Config) -> int:
 def cmd_approve(args: argparse.Namespace, cfg: Config) -> int:
     if bool(args.mac) == args.all:
         raise CliError("give either a MAC address or --all")
+    if args.all and args.name:
+        raise CliError("--name needs a MAC address; it can't be used with --all")
     with _open_store(cfg) as store:
         if args.all:
             print(f"Approved {store.approve_all()} device(s).")

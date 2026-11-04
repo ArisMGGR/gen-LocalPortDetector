@@ -45,6 +45,8 @@ class DetectionConfig:
 class StorageConfig:
     database: str = "/var/lib/netsentry/devices.db"
     event_log: str = "/var/log/netsentry/events.jsonl"
+    daily_log_dir: str = "/var/log/netsentry/logs"  # one YYYY-MM-DD.log per day; empty: disabled
+    daily_log_check: int = 1800      # seconds between "server all good" / unapproved device checks
     keep_events_days: int = 180
     oui_file: str = ""               # empty: use the first vendor database found on the system
 
@@ -135,9 +137,12 @@ def _validate(cfg: Config) -> None:
         (cfg.scan.interval >= 10, "[scan] interval must be at least 10 seconds"),
         (cfg.scan.timeout > 0, "[scan] timeout must be positive"),
         (cfg.scan.passes >= 1, "[scan] passes must be at least 1"),
+        (cfg.scan.max_hosts >= 1, "[scan] max_hosts must be at least 1"),
         (cfg.detection.offline_after >= cfg.scan.interval, "[detection] offline_after must be >= [scan] interval"),
+        (cfg.storage.daily_log_check >= cfg.scan.interval, "[storage] daily_log_check must be >= [scan] interval"),
         (cfg.storage.keep_events_days >= 1, "[storage] keep_events_days must be at least 1"),
         (cfg.email.security in ("starttls", "ssl", "none"), "[email] security must be starttls, ssl or none"),
+        (1 <= cfg.email.port <= 65535, "[email] port must be between 1 and 65535"),
         (not cfg.email.host or bool(cfg.email.sender and cfg.email.recipients),
          "[email] sender and recipients are required when host is set"),
         (cfg.webhook.format in ("generic", "slack", "discord"), "[webhook] format must be generic, slack or discord"),

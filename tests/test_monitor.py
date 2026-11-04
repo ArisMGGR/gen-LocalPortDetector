@@ -1,5 +1,6 @@
 import ipaddress
 import unittest
+from unittest import mock
 
 from netsentry.config import DetectionConfig
 from netsentry.monitor import Monitor
@@ -94,9 +95,18 @@ class MonitorTest(unittest.TestCase):
         self.assertEqual(kinds(self.store.events()), ["baseline", "new_device"])
 
     def test_cli_approval_survives_daemon_save(self):
-        self.monitor.process(scan(*self.home, ("192.168.1.50", STRANGER)), now=1000)
-        self.store.set_approved(STRANGER, False, "Mystery box")
-        self.monitor.process(scan(*self.home, ("192.168.1.50", STRANGER)), now=1060)
+        self.monitor.process(scan(*self.home, ("192.168.1.50", STRANGER)), now=1000)  # baseline: approved
+        real_get = self.store.get
+        stale = real_get(STRANGER)
+
+        def get_then_cli_edits(mac):  # the CLI changes the device after the daemon has read it
+            if mac != STRANGER:
+                return real_get(mac)
+            self.store.set_approved(STRANGER, False, "Mystery box")
+            return stale
+
+        with mock.patch.object(self.store, "get", get_then_cli_edits):
+            self.monitor.process(scan(*self.home, ("192.168.1.50", STRANGER)), now=1060)
         device = self.store.get(STRANGER)
         self.assertEqual((device.approved, device.name), (False, "Mystery box"))
 

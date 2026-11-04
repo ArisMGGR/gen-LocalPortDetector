@@ -81,7 +81,7 @@ def read_default_routes(path: str = "/proc/net/route") -> List[Tuple[str, str]]:
                 continue
             iface, dest, gateway, flags = parts[:4]
             if dest == "00000000" and int(flags, 16) & RTF_GATEWAY:
-                routes.append((int(parts[6]), iface, socket.inet_ntoa(struct.pack("<L", int(gateway, 16)))))
+                routes.append((int(parts[6]), iface, socket.inet_ntoa(struct.pack("=L", int(gateway, 16)))))
     return [(iface, gw) for _, iface, gw in sorted(routes)]
 
 

@@ -15,7 +15,7 @@ import tempfile
 from typing import Callable, Dict, List, Optional, Tuple
 from urllib.parse import urlsplit
 
-from .config import DEFAULT_CONFIG_PATH, Config, load_config
+from .config import DEFAULT_CONFIG_PATH, Config, ConfigError, load_config
 from .netutil import resolve_interface
 from .notify import EmailChannel, NtfyChannel, WebhookChannel, summarize
 from .store import Event
@@ -37,6 +37,7 @@ def update_config_text(text: str, changes: Changes) -> str:
     section: Optional[str] = None
     anchor = -1             # index in *out* after which missing options of the current section go
     in_continuation = False  # dropping the indented continuation lines of a replaced value
+    in_value = False         # keeping the indented continuation lines of an unchanged value
 
     def close_section() -> None:
         missing = pending.pop(section, None) if section else None
@@ -50,11 +51,17 @@ def update_config_text(text: str, changes: Changes) -> str:
             section = header.group(1).strip()
             out.append(line)
             anchor = len(out) - 1
-            in_continuation = False
+            in_continuation = in_value = False
             continue
-        if in_continuation and line[:1].isspace() and line.strip() and not line.lstrip().startswith(("#", ";")):
+        continuation = line[:1].isspace() and line.strip() and not line.lstrip().startswith(("#", ";"))
+        if in_continuation and continuation:
             continue
         in_continuation = False
+        if in_value and continuation:
+            out.append(line)
+            anchor = len(out) - 1
+            continue
+        in_value = False
         option = _OPTION_RE.match(line)
         if option and section is not None:
             key = option.group(1).lower()
@@ -63,6 +70,7 @@ def update_config_text(text: str, changes: Changes) -> str:
                 in_continuation = True
             else:
                 out.append(line)
+                in_value = True
             anchor = len(out) - 1
             continue
         out.append(line)
@@ -321,9 +329,10 @@ class Wizard:
 
     def step_alerts(self) -> None:
         self.say("== Alerts ==")
-        chatty = self.yes_no("Also notify you when known devices come online, go offline or change IP?",
-                             self.cfg.general.min_severity == "info")
-        self.set("general", "min_severity", "info" if chatty else "warning")
+        was_chatty = self.cfg.general.min_severity == "info"
+        chatty = self.yes_no("Also notify you when known devices come online, go offline or change IP?", was_chatty)
+        if chatty != was_chatty:  # keep a hand-set min_severity (e.g. critical) unless the answer changes
+            self.set("general", "min_severity", "info" if chatty else "warning")
         if not os.path.exists(self.cfg.storage.database):
             self.say("On its first scan netsentry can record every device already on the network as trusted.")
             self.say("Say no if you suspect something unwanted is connected: every device will then alert as new")
@@ -363,12 +372,24 @@ class Wizard:
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as fh:
                 fh.write(text)
-            cfg = load_config(tmp)
+            try:
+                cfg = load_config(tmp)
+            except ConfigError as exc:
+                raise RuntimeError(f"nothing saved; fix {self.path} by hand first: "
+                                   f"{str(exc).replace(tmp, self.path)}") from exc
             if os.path.exists(self.path):
                 st = os.stat(self.path)
                 os.chmod(tmp, st.st_mode & 0o7777)
                 if hasattr(os, "chown"):
                     os.chown(tmp, st.st_uid, st.st_gid)
+            else:
+                # Same owner and mode as install.sh gives it, so the service user can read it.
+                os.chmod(tmp, 0o640)
+                try:
+                    import grp  # Linux only
+                    os.chown(tmp, -1, grp.getgrnam("netsentry").gr_gid)
+                except (ImportError, KeyError):
+                    pass
             os.replace(tmp, self.path)
         except BaseException:
             if os.path.exists(tmp):

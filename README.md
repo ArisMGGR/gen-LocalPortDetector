@@ -28,7 +28,26 @@ have **approved** it.
 | `online` / `offline` / `ip_change` | info | Normal comings and goings, logged but not pushed by default |
 
 Events from one scan go out as a single notification. Every event also goes to the journal,
-to the database (`netsentry events`) and to `/var/log/netsentry/events.jsonl`.
+to the database (`netsentry events`), to `/var/log/netsentry/events.jsonl` and to the daily log.
+
+### Daily logs
+
+`/var/log/netsentry/logs/` gets one readable file per day, named like `2026-11-04.log`. Events and
+scan errors are written as soon as they happen. Every 30 minutes a check adds one of:
+
+- `Unapproved device online: ...` for each unapproved device still on the network, repeated at each
+  check until you approve it or it leaves
+- `server all good` if no device is unapproved and nothing of warning severity or above, and no scan
+  error, happened since the last check
+
+```
+2026-11-04 14:30:02 [INFO] server all good
+2026-11-04 14:41:17 [WARNING] new_device: New device joined the network: 00:de:ad:be:ef:01 at 192.168.1.50
+2026-11-04 15:00:03 [WARNING] Unapproved device online: 00:de:ad:be:ef:01 at 192.168.1.50
+```
+
+No new lines at all means the service isn't running. Dates and times are the server's local time.
+`[storage] keep_events_days` also controls how long these files are kept.
 
 ## Requirements
 
@@ -104,6 +123,8 @@ are most likely to change:
 - `[scan] interface` / `subnet`: which network to watch (default: the default-route interface
   and its subnet).
 - `[scan] interval`: seconds between scans.
+- `[storage] daily_log_dir` / `daily_log_check`: the daily log folder (empty disables it) and the
+  seconds between its checks.
 - `[general] min_severity`: set it to `info` to also be told about devices coming and going.
 - `[detection] offline_after`: phones sleep and stop answering; raise this if you get flapping.
 
@@ -115,9 +136,9 @@ netsentry is an early-warning tripwire, not a full intrusion detection system. K
 
 - **Only the local segment.** ARP doesn't cross routers. Devices on other VLANs, a separate
   guest network or behind another router are invisible unless you run an instance there too.
-- **MAC spoofing.** An intruder who copies the MAC of an approved device while that device is
-  offline looks like the approved device. If both are online at once you get an `ip_conflict`
-  when they share an IP. Otherwise it shows up only as an `ip_change`.
+- **MAC spoofing.** An intruder who copies the MAC of an approved device looks like the approved
+  device. If it uses a different IP, it shows up only as an `ip_change`; if it also copies the IP,
+  nothing is detected (an `ip_conflict` needs two different MACs on one IP).
 - **Randomized MACs.** Modern phones use a random MAC per Wi-Fi network (and some rotate it
   periodically), so the same phone can show up as "new" again. Alerts point out randomized MACs.
   You can turn the feature off per network on your own devices.
@@ -143,8 +164,8 @@ sudo python3 -m netsentry scan                        # from the repo, no instal
 sudo python3 -m netsentry -c dev.conf run             # foreground daemon with your own config
 ```
 
-`dev.conf` (and any other `*.conf` in the repo root) is git-ignored, so real tokens and passwords
-stay out of commits.
+`dev.conf` (and any other `*.conf` outside `packaging/netsentry.conf`) is git-ignored, so real tokens
+and passwords stay out of commits.
 
 ## License
 

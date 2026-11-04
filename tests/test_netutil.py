@@ -1,14 +1,22 @@
 import ipaddress
 import os
+import socket
+import struct
 import tempfile
 import unittest
 
 from netsentry.netutil import (Interface, ScanResult, build_arp_request, is_randomized_mac, normalize_mac,
                                parse_arp, read_default_routes)
 
-ROUTES = """Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT
-wlan0\t00000000\t0101A8C0\t0003\t0\t0\t600\t00000000\t0\t0\t0
-eth0\t00000000\t0100000A\t0003\t0\t0\t100\t00000000\t0\t0\t0
+
+def route_hex(ip: str) -> str:
+    """Format *ip* as /proc/net/route does: a 32-bit integer in the host's byte order."""
+    return f"{struct.unpack('=L', socket.inet_aton(ip))[0]:08X}"
+
+
+ROUTES = f"""Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT
+wlan0\t00000000\t{route_hex("192.168.1.1")}\t0003\t0\t0\t600\t00000000\t0\t0\t0
+eth0\t00000000\t{route_hex("10.0.0.1")}\t0003\t0\t0\t100\t00000000\t0\t0\t0
 eth0\t0000000A\t00000000\t0001\t0\t0\t100\t00FFFFFF\t0\t0\t0
 """
 

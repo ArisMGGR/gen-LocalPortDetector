@@ -31,9 +31,10 @@ find "$PREFIX" -name __pycache__ -prune -exec rm -rf {} +
 install -m 0644 "$SRC/README.md" "$PREFIX/README.md"
 chmod -R u=rwX,go=rX "$PREFIX"
 
+# -I keeps the current directory (and PYTHONPATH) off sys.path, so root never imports code from where it runs.
 cat > "$BIN" <<EOF
 #!/bin/sh
-PYTHONPATH=$PREFIX exec python3 -m netsentry "\$@"
+exec python3 -I -c 'import sys; sys.path.insert(0, "$PREFIX"); from netsentry.cli import main; sys.exit(main())' "\$@"
 EOF
 chmod 0755 "$BIN"
 
