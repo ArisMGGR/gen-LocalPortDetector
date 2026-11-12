@@ -32,16 +32,17 @@ to the database (`netsentry events`), to `/var/log/netsentry/events.jsonl` and t
 
 ### Daily logs
 
-`/var/log/netsentry/logs/` gets one readable file per day, named like `2026-11-04.log`. Events and
-scan errors are written as soon as they happen. Every 30 minutes a check adds one of:
+`/var/log/netsentry/logs/` gets one readable file per day, named like `2026-11-04.log`. Everything
+the service logs lands there as it happens: events, scan errors, failed notifications, start and
+stop. On top of that:
 
-- `Unapproved device online: ...` for each unapproved device still on the network, repeated at each
-  check until you approve it or it leaves
-- `server all good` if no device is unapproved and nothing of warning severity or above, and no scan
-  error, happened since the last check
+- `Unapproved device online: ...` is added every 30 minutes for each unapproved device still on the
+  network, until you approve it or it leaves
+- `No logs` is added when nothing at all was written for 30 minutes, so a quiet file still shows
+  the service is alive
 
 ```
-2026-11-04 14:30:02 [INFO] server all good
+2026-11-04 14:30:02 [INFO] No logs
 2026-11-04 14:41:17 [WARNING] new_device: New device joined the network: 00:de:ad:be:ef:01 at 192.168.1.50
 2026-11-04 15:00:03 [WARNING] Unapproved device online: 00:de:ad:be:ef:01 at 192.168.1.50
 ```

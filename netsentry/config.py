@@ -46,7 +46,7 @@ class StorageConfig:
     database: str = "/var/lib/netsentry/devices.db"
     event_log: str = "/var/log/netsentry/events.jsonl"
     daily_log_dir: str = "/var/log/netsentry/logs"  # one YYYY-MM-DD.log per day; empty: disabled
-    daily_log_check: int = 1800      # seconds between "server all good" / unapproved device checks
+    daily_log_check: int = 1800      # seconds between unapproved device reminders / of silence before "No logs"
     keep_events_days: int = 180
     oui_file: str = ""               # empty: use the first vendor database found on the system
 

@@ -85,17 +85,19 @@ class DaemonCheckTest(unittest.TestCase):
         cfg.storage.daily_log_dir = os.path.join(self.tmp.name, "logs")
         cfg.scan.resolve_hostnames = False
         self.daemon = Daemon(cfg)
-        self.addCleanup(self.daemon.store.close)
+        self.addCleanup(self.daemon.close)
         self.cycle()  # the baseline
-        self.check()  # its warning counts against the first window
 
     def cycle(self, *claims):
         with mock.patch("netsentry.daemon.resolve_interface", return_value=IFACE), \
                 mock.patch("netsentry.daemon.arp_scan", return_value=scan(*claims)):
             self.daemon.cycle()
 
-    def check(self):
+    def check(self, idle=True):
+        """Run a due check; *idle* pretends nothing was written for a whole interval."""
         self.daemon._next_check = 0
+        if idle:
+            self.daemon.daily_log.last_write -= self.daemon.cfg.storage.daily_log_check
         self.daemon._daily_check()
 
     def lines(self):
@@ -106,53 +108,89 @@ class DaemonCheckTest(unittest.TestCase):
                 text += fh.read()
         return text.splitlines()
 
-    def test_quiet_window_says_all_good(self):
+    def test_silent_interval_says_no_logs(self):
         before = self.lines()
         self.cycle()
         self.check()
         self.assertEqual(len(self.lines()), len(before) + 1)
-        self.assertTrue(self.lines()[-1].endswith("[INFO] server all good"))
+        self.assertTrue(self.lines()[-1].endswith("[INFO] No logs"))
 
-    def test_check_waits_for_its_interval(self):
+    def test_no_logs_repeats_only_after_another_silent_interval(self):
+        self.check()
+        count = len(self.lines())
+        self.check(idle=False)
+        self.assertEqual(len(self.lines()), count)
+        self.check()
+        self.assertEqual(len(self.lines()), count + 1)
+
+    def test_recent_line_holds_back_no_logs(self):
+        self.daemon._daily_events([Event("offline", "info", "Device went offline")])
+        self.check(idle=False)
+        self.assertTrue(self.lines()[-1].endswith("[INFO] offline: Device went offline"))
+
+    def test_unapproved_device_is_repeated_instead_of_no_logs(self):
+        self.cycle(("192.168.1.50", STRANGER))
+        self.check()
+        self.check()
+        text = "\n".join(self.lines())
+        self.assertIn("[WARNING] new_device:", text)
+        self.assertEqual(text.count(f"[WARNING] Unapproved device online: {STRANGER}"), 2)
+        self.assertNotIn("No logs", text)
+
+        self.daemon.store.set_approved(STRANGER, True)
+        self.check()
+        self.assertTrue(self.lines()[-1].endswith("No logs"))
+
+    def test_reminder_waits_for_its_interval(self):
+        self.cycle(("192.168.1.50", STRANGER))
         before = self.lines()
         self.daemon._next_check = time.monotonic() + 60
         self.daemon._daily_check()
         self.assertEqual(self.lines(), before)
 
-    def test_new_device_blocks_all_good_until_approved(self):
+    def test_event_is_written_once(self):
+        logging.getLogger("netsentry").setLevel(logging.INFO)
+        self.addCleanup(logging.getLogger("netsentry").setLevel, logging.NOTSET)
         self.cycle(("192.168.1.50", STRANGER))
-        self.check()
-        text = "\n".join(self.lines())
-        self.assertIn("[WARNING] new_device:", text)
-        self.assertIn(f"[WARNING] Unapproved device online: {STRANGER}", text)
-        self.assertNotIn("server all good", text)
-        self.check()
-        self.assertNotIn("server all good", "\n".join(self.lines()))
+        self.assertEqual("\n".join(self.lines()).count("new_device:"), 1)
 
-        self.daemon.store.set_approved(STRANGER, True)
-        self.check()
-        self.assertTrue(self.lines()[-1].endswith("server all good"))
+    def test_errors_from_any_module_reach_the_daily_log(self):
+        logging.getLogger("netsentry.notify").error("ntfy failed: %s", "timeout")
+        self.assertTrue(self.lines()[-1].endswith("[ERROR] ntfy failed: timeout"))
 
-    def test_scan_error_blocks_all_good_for_that_window(self):
+    def test_scan_errors_reach_the_daily_log(self):
         def fail():
             self.daemon.stopping.set()
             raise RuntimeError("no IPv4 address on eth0")
 
-        with mock.patch.object(self.daemon, "cycle", side_effect=fail), \
-                mock.patch.object(self.daemon.store, "close"):
-            with self.assertLogs("netsentry.daemon", "ERROR"):
-                self.daemon.run()
-        self.assertIn("[ERROR] scan skipped: no IPv4 address on eth0", self.lines()[-1])
-        self.check()
-        self.assertNotIn("server all good", "\n".join(self.lines()))
-        self.check()
-        self.assertTrue(self.lines()[-1].endswith("server all good"))
+        with mock.patch.object(self.daemon, "cycle", side_effect=fail):
+            self.daemon.run()
+        self.assertIn("[ERROR] scan skipped: no IPv4 address on eth0", "\n".join(self.lines()))
 
-    def test_info_events_do_not_block_all_good(self):
-        self.daemon._daily_events([Event("offline", "info", "Device went offline")])
-        self.check()
-        self.assertIn("[INFO] offline: Device went offline", "\n".join(self.lines()))
-        self.assertTrue(self.lines()[-1].endswith("server all good"))
+    def test_unexpected_failure_is_logged_with_its_cause(self):
+        def fail():
+            self.daemon.stopping.set()
+            raise ValueError("boom")
+
+        with mock.patch.object(self.daemon, "cycle", side_effect=fail):
+            self.daemon.run()
+        self.assertIn("[ERROR] scan cycle failed: boom", "\n".join(self.lines()))
+
+    def test_close_stops_copying_log_output(self):
+        before = self.lines()
+        self.daemon.close()
+        self.daemon.store = mock.Mock()  # the cleanup closes it a second time
+        with self.assertLogs("netsentry.notify", "ERROR"):
+            logging.getLogger("netsentry.notify").error("after close")
+        self.assertEqual(self.lines(), before)
+
+    def test_daily_log_write_failure_does_not_recurse(self):
+        self.daemon.daily_log.directory = os.path.join(self.tmp.name, "logs", "2026-11-04.log", "x")
+        with open(os.path.join(self.tmp.name, "logs", "2026-11-04.log"), "a", encoding="utf-8"):
+            pass
+        with self.assertLogs("netsentry.dailylog", "ERROR") as caught:
+            logging.getLogger("netsentry.notify").error("ntfy failed")
+        self.assertEqual(len(caught.records), 1)
 
 
 if __name__ == "__main__":
