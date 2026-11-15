@@ -16,6 +16,7 @@ __pycache__/
 *.sqlite3
 *.jsonl
 *.log
+/logs/
 
 # Code-check working notes (local audit output)
 tests/FINDINGS.md

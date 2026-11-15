@@ -32,7 +32,8 @@ to the database (`netsentry events`), to `/var/log/netsentry/events.jsonl` and t
 
 ### Daily logs
 
-`/var/log/netsentry/logs/` gets one readable file per day, named like `2026-11-04.log`. Everything
+The `logs/` folder inside the project (the folder you ran `install.sh` from) gets one readable file
+per day, named like `2026-11-04.log`. You can read them without sudo. Everything
 the service logs lands there as it happens: events, scan errors, failed notifications, start and
 stop. On top of that:
 
@@ -49,6 +50,11 @@ stop. On top of that:
 
 No new lines at all means the service isn't running. Dates and times are the server's local time.
 `[storage] keep_events_days` also controls how long these files are kept.
+
+The service keeps writing there only while the project folder stays where it is. If you move it,
+run `sudo ./install.sh` again from the new location. The installer sets `daily_log_dir` in the
+config and adds `/etc/systemd/system/netsentry.service.d/logs.conf`, which allows the service
+into that one folder and hides the rest of `/home` from it.
 
 ## Requirements
 
@@ -156,6 +162,8 @@ netsentry is an early-warning tripwire, not a full intrusion detection system. K
 sudo ./uninstall.sh            # keeps config, database and logs
 sudo ./uninstall.sh --purge    # removes everything, including the netsentry user
 ```
+
+The project's `logs/` folder is never removed by the uninstaller; delete it yourself if you want.
 
 ## Development
 

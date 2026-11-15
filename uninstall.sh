@@ -6,13 +6,14 @@ set -euo pipefail
 
 systemctl disable --now netsentry 2>/dev/null || true
 rm -f /etc/systemd/system/netsentry.service /usr/local/bin/netsentry
+rm -rf /etc/systemd/system/netsentry.service.d
 rm -rf /opt/netsentry
 systemctl daemon-reload
 
 if [[ "${1:-}" == "--purge" ]]; then
     rm -rf /etc/netsentry /var/lib/netsentry /var/log/netsentry
     userdel netsentry 2>/dev/null || true
-    echo "netsentry removed, including config, data and logs."
+    echo "netsentry removed, including config, data and logs (the project's logs folder is left alone)."
 else
     echo "netsentry removed. Kept /etc/netsentry, /var/lib/netsentry and /var/log/netsentry (use --purge to delete)."
 fi
