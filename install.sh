@@ -51,8 +51,8 @@ fi
 
 # Daily logs go to <project>/logs. The folder belongs to the service user, with your group so
 # you can read the logs without sudo (setgid makes new files inherit that group).
-BAD_PATH_CHARS='[[:space:]|&\\]'
-[[ ! "$LOG_DIR" =~ $BAD_PATH_CHARS ]] || die "the project path must not contain spaces, |, & or \\: $SRC"
+BAD_PATH_CHARS='[[:space:]|&\\:%]'
+[[ ! "$LOG_DIR" =~ $BAD_PATH_CHARS ]] || die "the project path must not contain spaces, |, &, \\, : or %: $SRC"
 LOG_GROUP="$(id -gn "${SUDO_USER:-root}")"
 install -d -o netsentry -g "$LOG_GROUP" "$LOG_DIR"
 chown netsentry:"$LOG_GROUP" "$LOG_DIR"
@@ -65,8 +65,8 @@ if compgen -G "$OLD_LOG_DIR/????-??-??.log" >/dev/null; then
 fi
 
 CONF="$CONF_DIR/netsentry.conf"
-if grep -qE '^[[:space:]]*daily_log_dir[[:space:]]*=' "$CONF"; then
-    sed -i -E "s|^[[:space:]]*daily_log_dir[[:space:]]*=.*|daily_log_dir = $LOG_DIR|" "$CONF"
+if grep -qE '^[[:space:]]*daily_log_dir[[:space:]]*[=:]' "$CONF"; then
+    sed -i -E "s|^[[:space:]]*daily_log_dir[[:space:]]*[=:].*|daily_log_dir = $LOG_DIR|" "$CONF"
 elif grep -qE '^\[storage\]' "$CONF"; then
     sed -i "/^\[storage\]/a daily_log_dir = $LOG_DIR" "$CONF"
 else
@@ -76,12 +76,13 @@ echo "Daily logs go to $LOG_DIR"
 
 # The unit's ProtectHome=yes hides all of /home from the service. This drop-in swaps it for an
 # empty /home and bind-mounts only the logs folder back in, so nothing else in /home is visible.
+# The leading "-" skips the mount if the folder is gone, so the service still starts (without daily logs).
 install -d -m 0755 "$DROPIN_DIR"
 cat > "$DROPIN_DIR/logs.conf" <<EOF
 # Written by install.sh: lets the service write its daily logs to the project folder.
 [Service]
 ProtectHome=tmpfs
-BindPaths=$LOG_DIR
+BindPaths=-$LOG_DIR
 EOF
 chmod 0644 "$DROPIN_DIR/logs.conf"
 

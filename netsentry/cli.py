@@ -194,6 +194,8 @@ def cmd_forget(args: argparse.Namespace, cfg: Config) -> int:
 
 
 def cmd_events(args: argparse.Namespace, cfg: Config) -> int:
+    if args.limit < 0:
+        raise CliError("--limit must be 0 or more")
     with _open_store(cfg) as store:
         for e in store.events(args.limit):
             print(f"{_fmt_time(e.ts)}  {e.severity.upper():<8}  {e.kind:<17}  {e.message}")

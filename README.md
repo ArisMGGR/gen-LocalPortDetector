@@ -84,7 +84,8 @@ keeps its comments.
 
 The install step creates a `netsentry` system user, installs the program to `/opt/netsentry`, the
 command to `/usr/local/bin/netsentry`, the config to `/etc/netsentry/netsentry.conf` and the unit to
-`/etc/systemd/system/netsentry.service`. Running it again upgrades in place and keeps your config.
+`/etc/systemd/system/netsentry.service`. Running it again upgrades in place and keeps your config,
+except that `[storage] daily_log_dir` is set back to the project's `logs/` folder.
 
 <details>
 <summary>Manual setup instead</summary>

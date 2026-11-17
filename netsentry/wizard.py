@@ -23,7 +23,7 @@ from .store import Event
 UNIT_PATH = "/etc/systemd/system/netsentry.service"
 SECRET_OPTIONS = {("ntfy", "token"), ("email", "password")}
 EMAIL_PORTS = {"starttls": 587, "ssl": 465, "none": 25}
-_SECTION_RE = re.compile(r"\s*\[([^\]]+)\]\s*$")
+_SECTION_RE = re.compile(r"\s*\[(.+)\]")  # same rule as configparser, so "[ntfy] # note" is a header too
 _OPTION_RE = re.compile(r"([A-Za-z0-9_]+)\s*[=:]")
 _NTFY_TOPIC_RE = re.compile(r"[-_A-Za-z0-9]{1,64}")
 

@@ -55,17 +55,23 @@ class DailyLogTest(unittest.TestCase):
     def test_prune_removes_only_old_day_files(self):
         self.log.write("INFO", "old", day("2026-01-01"))
         self.log.write("INFO", "new", day("2026-11-04"))
-        with open(os.path.join(self.dir, "notes.log"), "w", encoding="utf-8"):
+        # Not a day file, but dated before the cutoff, so only the name check keeps it.
+        with open(os.path.join(self.dir, "2026-01-01-notes.log"), "w", encoding="utf-8"):
             pass
         self.assertEqual(self.log.prune(day("2026-11-01")), 1)
-        self.assertEqual(sorted(os.listdir(self.dir)), ["2026-11-04.log", "notes.log"])
+        self.assertEqual(sorted(os.listdir(self.dir)), ["2026-01-01-notes.log", "2026-11-04.log"])
 
     def test_prune_without_a_folder_yet(self):
         self.assertEqual(self.log.prune(day("2026-11-01")), 0)
 
     def test_empty_directory_disables_it(self):
-        DailyLog("").write("INFO", "nothing")
-        self.assertEqual(DailyLog("").prune(day("2026-11-01")), 0)
+        # Disabled means no file access at all, not a failed write that logs an error.
+        with mock.patch.object(logging.getLogger("netsentry.dailylog"), "error") as error, \
+                mock.patch("netsentry.dailylog.os.listdir") as listdir:
+            DailyLog("").write("INFO", "nothing")
+            self.assertEqual(DailyLog("").prune(day("2026-11-01")), 0)
+        error.assert_not_called()
+        listdir.assert_not_called()
 
     def test_unwritable_folder_is_reported_not_raised(self):
         with open(os.path.join(self.tmp.name, "file"), "w", encoding="utf-8"):
@@ -180,17 +186,27 @@ class DaemonCheckTest(unittest.TestCase):
         before = self.lines()
         self.daemon.close()
         self.daemon.store = mock.Mock()  # the cleanup closes it a second time
-        with self.assertLogs("netsentry.notify", "ERROR"):
-            logging.getLogger("netsentry.notify").error("after close")
+        # A NullHandler keeps the output quiet but, unlike assertLogs, lets the record reach "netsentry".
+        notify_log = logging.getLogger("netsentry.notify")
+        quiet = logging.NullHandler()
+        notify_log.addHandler(quiet)
+        self.addCleanup(notify_log.removeHandler, quiet)
+        notify_log.error("after close")
         self.assertEqual(self.lines(), before)
 
     def test_daily_log_write_failure_does_not_recurse(self):
         self.daemon.daily_log.directory = os.path.join(self.tmp.name, "logs", "2026-11-04.log", "x")
         with open(os.path.join(self.tmp.name, "logs", "2026-11-04.log"), "a", encoding="utf-8"):
             pass
-        with self.assertLogs("netsentry.dailylog", "ERROR") as caught:
-            logging.getLogger("netsentry.notify").error("ntfy failed")
-        self.assertEqual(len(caught.records), 1)
+        # Capture without assertLogs: it stops propagation, so a recursion through "netsentry" could never happen.
+        caught = []
+        capture = logging.Handler()
+        capture.emit = caught.append
+        dailylog_log = logging.getLogger("netsentry.dailylog")
+        dailylog_log.addHandler(capture)
+        self.addCleanup(dailylog_log.removeHandler, capture)
+        logging.getLogger("netsentry.notify").error("ntfy failed")
+        self.assertEqual(len(caught), 1)
 
 
 if __name__ == "__main__":
